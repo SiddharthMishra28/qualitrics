@@ -1,0 +1,138 @@
+Part 1 – Java Spring Boot Backend
+General Requirements
+Framework: Java Spring Boot (latest stable version)
+Build Tool: Maven
+Database: PostgreSQL
+ORM: Spring Data JPA + Hibernate
+Database Migration: Flyway or Liquibase
+Code Structure:
+controller → REST API endpoints
+service → business logic
+repository → database operations
+dto → request/response models
+entity → JPA entities
+exception → custom exception handling
+config → application configurations
+Error Handling: Global exception handler with structured error response {timestamp, status, error, message, path}.
+Validation: Spring @Valid and Bean Validation (@NotNull, @Size, etc.).
+Testing: JUnit + Mockito for unit and integration tests.
+CORS: Configured for Next.js frontend.
+Database Tables
+applications
+CREATE TABLE applications (
+    id BIGSERIAL PRIMARY KEY,
+    application_id VARCHAR(32) UNIQUE,
+    application_name VARCHAR(64),
+    application_description TEXT,
+    stream VARCHAR(64),
+    crew VARCHAR(64),
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+executions
+CREATE TABLE executions (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID DEFAULT gen_random_uuid(),
+    application_id BIGINT,
+    execution_type VARCHAR(64) CHECK (execution_type IN ('functional', 'regression')),
+    execution_suite_category VARCHAR(128) CHECK (execution_suite_category IN ('sanity', 'smoke')),
+    total_test_cases INT,
+    count_passed INT,
+    count_failed INT,
+    count_skipped INT,
+    execution_time float8,
+    report_link TEXT,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    FOREIGN KEY (application_id) REFERENCES applications(id)
+);
+API Endpoints
+Application Endpoints
+POST /api/applications/register
+GET /api/applications
+GET /api/applications/{applicationId}
+GET /api/applications/{applicationId}/executions
+GET /api/applications/stream/{streamName}
+GET /api/applications/stream/{streamName}/crew/{crewName}
+GET /api/applications/crew/{crewName}
+Execution Endpoints
+POST /api/executions/publish-results
+GET /api/executions/{executionReference}
+Dashboard Endpoints
+GET /api/dashboard/summary
+GET /api/dashboard/{suiteCategory}/suite-summary
+GET /api/dashboard/{executionType}/execution-summary
+GET /api/dashboard/{applicationId}/{executionType}/{suiteCategory}/summary
+GET /api/dashboard/{applicationId}/{executionType}/execution-summary
+GET /api/dashboard/{applicationId}/summary
+GET /api/dashboard/{applicationId}/suiteCategory/suite-summary
+DTOs
+ExecutionDto
+{
+  "applicationId": "string",
+  "executionType": "string",
+  "executionSuiteCategory": "string",
+  "totalTestCases": "integer",
+  "countPassed": "integer",
+  "countFailed": "integer",
+  "countSkipped": "integer",
+  "overallBuildStatus": "string",
+  "executionTime": "double",
+  "reportLink": "string"
+}
+ResultPublishedDto
+{
+  "publishResult": "string",
+  "executionReferenceId": "uuid"
+}
+ApplicationDto
+{
+  "id": "integer",
+  "applicationId": "string",
+  "applicationName": "string",
+  "applicationDescription": "string",
+  "stream": "string",
+  "crew": "string"
+}
+OverallExecutionSummary
+{
+  "totalBuilds": "integer",
+  "totalBuildsPassed": "integer",
+  "totalBuildsFailed": "integer",
+  "percentPassed": "double",
+  "percentFailed": "double"
+}
+ApplicationExecutionSummary
+{
+  "applicationId": "string",
+  "applicationName": "string",
+  "totalBuilds": "integer",
+  "totalBuildsPassed": "integer",
+  "totalBuildsFailed": "integer",
+  "percentPassed": "double",
+  "percentFailed": "double"
+}
+ApplicationResponse
+{
+  "applications": "any"
+}
+ExecutionsByApplicationResponse
+{
+  "applicationId": "string",
+  "applicationName": "string",
+  "executions": "array",
+  "items": [
+    {
+      "applicationId": "string",
+      "executionType": "string",
+      "executionSuiteCategory": "string",
+      "totalTestCases": "integer",
+      "countPassed": "integer",
+      "countFailed": "integer",
+      "countSkipped": "integer",
+      "overallBuildStatus": "string",
+      "executionTime": "double",
+      "reportLink": "string"
+    }
+  ]
+}
