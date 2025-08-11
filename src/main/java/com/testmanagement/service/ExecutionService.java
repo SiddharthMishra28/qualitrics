@@ -78,6 +78,32 @@ public class ExecutionService {
     }
 
     /**
+     * Get executions by execution type
+     */
+    @Transactional(readOnly = true)
+    public List<ExecutionDto> getExecutionsByType(String executionType) {
+        Execution.ExecutionType type = Execution.ExecutionType.valueOf(executionType.toLowerCase());
+        List<Execution> executions = executionRepository.findByExecutionTypeOrderByCreatedAtDesc(type);
+        
+        return executions.stream()
+                .map(this::convertToDto)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Get executions by suite category
+     */
+    @Transactional(readOnly = true)
+    public List<ExecutionDto> getExecutionsBySuiteCategory(String suiteCategory) {
+        Execution.ExecutionSuiteCategory category = Execution.ExecutionSuiteCategory.valueOf(suiteCategory.toLowerCase());
+        List<Execution> executions = executionRepository.findByExecutionSuiteCategoryOrderByCreatedAtDesc(category);
+        
+        return executions.stream()
+                .map(this::convertToDto)
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Convert Execution entity to DTO
      */
     private ExecutionDto convertToDto(Execution execution) {

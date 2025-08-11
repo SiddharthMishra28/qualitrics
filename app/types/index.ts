@@ -55,3 +55,10 @@ export interface ExecutionsByApplicationResponse {
   applicationName: string
   executions: ExecutionDto[]
 }
+
+export interface DailyExecutionSummary {
+  date: string
+  totalBuilds: number
+  passed: number
+  failed: number
+}

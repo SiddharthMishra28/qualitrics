@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -50,5 +51,25 @@ public class ExecutionController {
     public ResponseEntity<ExecutionDto> getExecutionByReference(@PathVariable UUID executionReference) {
         ExecutionDto execution = executionService.getExecutionByReference(executionReference);
         return ResponseEntity.ok(execution);
+    }
+
+    /**
+     * GET /api/executions/type/{executionType}
+     * Get executions by execution type
+     */
+    @GetMapping("/type/{executionType}")
+    public ResponseEntity<List<ExecutionDto>> getExecutionsByType(@PathVariable String executionType) {
+        List<ExecutionDto> executions = executionService.getExecutionsByType(executionType);
+        return ResponseEntity.ok(executions);
+    }
+
+    /**
+     * GET /api/executions/suite/{suiteCategory}
+     * Get executions by suite category
+     */
+    @GetMapping("/suite/{suiteCategory}")
+    public ResponseEntity<List<ExecutionDto>> getExecutionsBySuiteCategory(@PathVariable String suiteCategory) {
+        List<ExecutionDto> executions = executionService.getExecutionsBySuiteCategory(suiteCategory);
+        return ResponseEntity.ok(executions);
     }
 }

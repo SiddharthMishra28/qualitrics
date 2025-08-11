@@ -122,9 +122,10 @@ public class DashboardController {
      */
     @GetMapping("/applications/summary")
     public ResponseEntity<List<ApplicationExecutionSummary>> getAllApplicationsSummary(
+            @RequestParam(required = false) String applicationId,
             @RequestParam(required = false) String stream,
             @RequestParam(required = false) String crew) {
-        List<ApplicationExecutionSummary> summaries = dashboardService.getAllApplicationsSummary(stream, crew);
+        List<ApplicationExecutionSummary> summaries = dashboardService.getAllApplicationsSummary(applicationId, stream, crew);
         return ResponseEntity.ok(summaries);
     }
 

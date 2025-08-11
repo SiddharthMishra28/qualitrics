@@ -1,8 +1,8 @@
 
 'use client'
 import { useState, useEffect, Fragment } from 'react'
-import { dashboardApi, applicationApi } from './lib/api'
-import { OverallExecutionSummary, ApplicationExecutionSummary, ApplicationDto, DailyExecutionSummary } from './types'
+import { dashboardApi, applicationApi, executionApi } from './lib/api'
+import { OverallExecutionSummary, ApplicationExecutionSummary, ApplicationDto, DailyExecutionSummary, ExecutionDto } from './types'
 import { 
   BarChart3, TrendingUp, TrendingDown, Activity, Filter, Download, 
   PieChart, Eye, RefreshCw, Calendar, Search, ChevronDown, X
@@ -21,7 +21,7 @@ export default function Dashboard() {
   const [selectedApp, setSelectedApp] = useState('')
   const [appSummary, setAppSummary] = useState<OverallExecutionSummary | null>(null)
   const [loading, setLoading] = useState(true)
-  const [selectedView, setSelectedView] = useState<'overview' | 'execution-types' | 'suite-categories' | 'applications' | 'trends'>('overview')
+  const [selectedView, setSelectedView] = useState<'overview' | 'execution-types' | 'suite-categories' | 'execution-trends'>('overview')
   const [tableData, setTableData] = useState<any[]>([])
   const [showTable, setShowTable] = useState(false)
   const [tableTitle, setTableTitle] = useState('')
@@ -62,20 +62,37 @@ export default function Dashboard() {
     fetchDistinctFilters()
   }, [])
 
+  // Only load application analytics when selectedApp changes, not on filter changes
   useEffect(() => {
     if (selectedApp) {
       loadApplicationAnalytics()
     } else {
       setAppSummary(null)
+      setApplicationDailyTrends([]) // Clear application trends when no app is selected
     }
   }, [selectedApp])
+
+  // Apply filters function
+  const applyFilters = async () => {
+    setLoading(true)
+    try {
+      await loadDashboardData()
+      await loadApplicationAnalytics()
+      toast.success('Filters applied successfully')
+    } catch (error) {
+      toast.error('Failed to apply filters')
+      console.error(error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const loadDashboardData = async () => {
     try {
       setLoading(true)
       const [overall, apps, applications, functional, regression, sanity, smoke, overallTrends] = await Promise.all([
         dashboardApi.getOverallSummary(selectedApp, selectedStream, selectedCrew),
-        dashboardApi.getAllApplicationsSummary(selectedStream, selectedCrew),
+        dashboardApi.getAllApplicationsSummary(selectedApp, selectedStream, selectedCrew),
         applicationApi.getAll(), // This doesn't need filters as it's for the dropdown
         dashboardApi.getExecutionSummary('functional', selectedApp, selectedStream, selectedCrew),
         dashboardApi.getExecutionSummary('regression', selectedApp, selectedStream, selectedCrew),
@@ -100,18 +117,37 @@ export default function Dashboard() {
   }
 
   const loadApplicationAnalytics = async () => {
-    if (!selectedApp) return
+    if (!selectedApp) {
+      setAppSummary(null); // Clear appSummary if no app is selected
+      setApplicationDailyTrends([]); // Clear trends if no app is selected
+      return;
+    }
     
     try {
       const [summary, appTrends] = await Promise.all([
         dashboardApi.getApplicationSummary(selectedApp),
-        dashboardApi.getApplicationDailyExecutionTrends(selectedApp, selectedStream, selectedCrew) // Fetch application daily trends with filters
-      ])
-      setAppSummary(summary)
-      setApplicationDailyTrends(appTrends) // Set application daily trends
+        dashboardApi.getApplicationDailyExecutionTrends(selectedApp, selectedStream, selectedCrew)
+      ]);
+
+      // Check if summary data is valid, otherwise set to null
+      if (summary && summary.totalBuilds !== undefined && summary.totalBuilds > 0) {
+        setAppSummary(summary);
+      } else {
+        setAppSummary(null);
+      }
+      
+      // Check if appTrends data is valid, otherwise set to empty array
+      if (appTrends && appTrends.length > 0) {
+        setApplicationDailyTrends(appTrends);
+      } else {
+        setApplicationDailyTrends([]);
+      }
+
     } catch (error) {
-      toast.error('Failed to load application analytics')
-      console.error(error)
+      toast.error('Failed to load application analytics');
+      console.error(error);
+      setAppSummary(null); // Clear on error
+      setApplicationDailyTrends([]); // Clear on error
     }
   }
 
@@ -122,6 +158,38 @@ export default function Dashboard() {
         const response = await applicationApi.getExecutions(data.applicationId);
         setTableData(response.executions);
         setTableTitle(`Executions for ${data.applicationName}`);
+        setShowTable(true);
+      } catch (error) {
+        toast.error('Failed to load execution data');
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (type === 'execution-type') {
+      try {
+        setLoading(true);
+        const executions = await executionApi.getByType(data.type);
+        setTableData(executions);
+        setTableTitle(`${data.title} Executions`);
+        setShowTable(true);
+      } catch (error) {
+        toast.error('Failed to load execution data');
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (type === 'suite-category') {
+      try {
+        setLoading(true);
+        const executions = await executionApi.getBySuiteCategory(data.type);
+        setTableData(executions);
+        setTableTitle(`${data.title} Executions`);
         setShowTable(true);
       } catch (error) {
         toast.error('Failed to load execution data');
@@ -159,7 +227,12 @@ export default function Dashboard() {
         const toastId = toast.loading('Loading all executions... This may take a moment.');
         try {
           const allExecutions = [];
-          for (const app of applications) {
+          // Use filtered applications based on global filters
+          const filteredApps = appSummaries.map(summary => 
+            applications.find(app => app.applicationId === summary.applicationId)
+          ).filter(Boolean);
+          
+          for (const app of filteredApps) {
             try {
               const response = await applicationApi.getExecutions(app.applicationId);
               if (response.executions && response.executions.length > 0) {
@@ -176,7 +249,7 @@ export default function Dashboard() {
             }
           }
           setTableData(allExecutions);
-          setTableTitle('All Application Executions');
+          setTableTitle('All Application Executions (Filtered)');
           setShowTable(true);
           toast.success('Successfully loaded all executions.', { id: toastId });
         } catch (error) {
@@ -212,13 +285,18 @@ export default function Dashboard() {
   }
 
   const exportData = async (format: 'csv' | 'json' = 'csv') => {
-    const toastId = toast.loading('Exporting all executions... This might take a while.');
+    const toastId = toast.loading('Exporting filtered executions... This might take a while.');
     setLoading(true);
 
     try {
       const allExecutionsWithDetails = [];
+      
+      // Use filtered applications based on global filters
+      const filteredApps = appSummaries.map(summary => 
+        applications.find(app => app.applicationId === summary.applicationId)
+      ).filter(Boolean);
 
-      for (const app of applications) {
+      for (const app of filteredApps) {
         try {
           const response = await applicationApi.getExecutions(app.applicationId);
           if (response.executions && response.executions.length > 0) {
@@ -254,7 +332,7 @@ export default function Dashboard() {
         const encodedUri = "data:text/csv;charset=utf-8," + encodeURIComponent(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `global-executions-export-${new Date().toISOString().split('T')[0]}.csv`);
+        link.setAttribute("download", `filtered-executions-export-${new Date().toISOString().split('T')[0]}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -262,7 +340,7 @@ export default function Dashboard() {
         const jsonContent = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(allExecutionsWithDetails, null, 2));
         const link = document.createElement("a");
         link.setAttribute("href", jsonContent);
-        link.setAttribute("download", `global-executions-export-${new Date().toISOString().split('T')[0]}.json`);
+        link.setAttribute("download", `filtered-executions-export-${new Date().toISOString().split('T')[0]}.json`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -279,7 +357,7 @@ export default function Dashboard() {
   };
 
   const PieChart = ({ data, title, color, onClick }: { data: OverallExecutionSummary | null, title: string, color: string, onClick: () => void }) => {
-    if (!data) return <div className="text-center text-gray-500">No data available</div>
+    if (!data || data.totalBuilds === 0) return <div className="text-center text-gray-500">No data available</div>
     
     const radius = 70
     const circumference = 2 * Math.PI * radius
@@ -342,16 +420,29 @@ export default function Dashboard() {
     if (!data || data.length === 0) return <div className="text-center text-gray-500">No trend data available</div>
 
     // Prepare data for Recharts
-    // Note: For date-wise trends, the 'data' prop would need to contain a date field
-    // and the backend API would need to provide historical data.
-    const chartData = data.map(item => ({
-      name: item.name || item.applicationName || 'N/A', // 'name' can represent a time period or application name
-      totalBuilds: item.totalBuilds || 0,
-      passed: item.totalBuildsPassed || 0,
-      failed: item.totalBuildsFailed || 0,
-    }));
+    const chartData = data.map(item => {
+      // Handle DailyExecutionSummary format (for date-wise trends)
+      if (item.date) {
+        return {
+          name: item.date,
+          totalBuilds: item.totalBuilds || 0,
+          passed: item.passed || 0,
+          failed: item.failed || 0,
+        };
+      }
+      // Handle ApplicationExecutionSummary format (for application comparison)
+      else {
+        return {
+          name: item.applicationName || 'N/A',
+          totalBuilds: item.totalBuilds || 0,
+          passed: item.totalBuildsPassed || 0,
+          failed: item.totalBuildsFailed || 0,
+        };
+      }
+    });
 
-    const isDateAxis = title.includes('(Daily)');
+    // Check if this is a date-based chart or application-based chart
+    const isDateAxis = title.includes('Daily') || (title.includes('Trends') && data.some(item => item.date));
 
     return (
       <div className="card p-6">
@@ -363,12 +454,40 @@ export default function Dashboard() {
               margin={{ top: 5, right: 30, left: 20, bottom: isDateAxis ? 5 : 75 }}
             >
               {isDateAxis ? (
-                <XAxis dataKey="name" tickFormatter={(tick) => new Date(tick).toLocaleDateString()} />
+                <XAxis 
+                  dataKey="name" 
+                  tickFormatter={(tick) => {
+                    try {
+                      return new Date(tick).toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric' 
+                      });
+                    } catch {
+                      return tick;
+                    }
+                  }} 
+                />
               ) : (
                 <XAxis dataKey="name" angle={-90} textAnchor="end" interval={0} />
               )}
               <YAxis />
-              <Tooltip />
+              <Tooltip 
+                labelFormatter={(label) => {
+                  if (isDateAxis) {
+                    try {
+                      return new Date(label).toLocaleDateString('en-US', { 
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long', 
+                        day: 'numeric' 
+                      });
+                    } catch {
+                      return label;
+                    }
+                  }
+                  return label;
+                }}
+              />
               <Legend />
               <Bar dataKey="totalBuilds" fill="#8884d8" name="Total Builds" />
               <Bar dataKey="passed" fill="#82ca9d" name="Passed" />
@@ -516,11 +635,21 @@ export default function Dashboard() {
         <h1 className="text-3xl font-bold text-gray-900">Test Management Dashboard</h1>
         <div className="flex items-center space-x-3">
           <button
-            onClick={loadDashboardData}
-            className="btn-primary flex items-center space-x-2"
+            onClick={applyFilters}
+            disabled={loading}
+            className="btn-primary flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <RefreshCw size={18} />
-            <span>Refresh</span>
+            {loading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>Refreshing...</span>
+              </>
+            ) : (
+              <>
+                <RefreshCw size={18} />
+                <span>Refresh</span>
+              </>
+            )}
           </button>
           <button onClick={() => exportData('csv')} className="btn-secondary flex items-center space-x-2">
             <Download size={18} />
@@ -530,50 +659,85 @@ export default function Dashboard() {
       </div>
 
       {/* Global Filters */}
-      <div className="card p-4 flex flex-wrap gap-4 items-center">
-        <h3 className="text-lg font-semibold text-gray-900">Filter Dashboard:</h3>
-        <select
-          value={selectedApp}
-          onChange={(e) => setSelectedApp(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        >
-          <option value="">All Applications</option>
-          {applications.map((app) => (
-            <option key={app.applicationId} value={app.applicationId}>
-              {app.applicationName}
-            </option>
-          ))}
-        </select>
+      <div className="card p-4">
+        <div className="flex flex-wrap gap-4 items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Filter Dashboard:</h3>
+          <select
+            value={selectedApp}
+            onChange={(e) => setSelectedApp(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            disabled={loading}
+          >
+            <option value="">All Applications</option>
+            {applications.map((app) => (
+              <option key={app.applicationId} value={app.applicationId}>
+                {app.applicationName}
+              </option>
+            ))}
+          </select>
 
-        <select
-          value={selectedStream}
-          onChange={(e) => setSelectedStream(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        >
-          <option value="">All Streams</option>
-          {distinctStreams.map((stream) => (
-            <option key={stream} value={stream}>
-              {stream}
-            </option>
-          ))}
-        </select>
+          <select
+            value={selectedStream}
+            onChange={(e) => setSelectedStream(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            disabled={loading}
+          >
+            <option value="">All Streams</option>
+            {distinctStreams.map((stream) => (
+              <option key={stream} value={stream}>
+                {stream}
+              </option>
+            ))}
+          </select>
 
-        <select
-          value={selectedCrew}
-          onChange={(e) => setSelectedCrew(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        >
-          <option value="">All Crews</option>
-          {distinctCrews.map((crew) => (
-            <option key={crew} value={crew}>
-              {crew}
-            </option>
-          ))}
-        </select>
-        <button onClick={loadDashboardData} className="btn-primary flex items-center space-x-2">
-          <Filter size={18} />
-          <span>Apply Filters</span>
-        </button>
+          <select
+            value={selectedCrew}
+            onChange={(e) => setSelectedCrew(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            disabled={loading}
+          >
+            <option value="">All Crews</option>
+            {distinctCrews.map((crew) => (
+              <option key={crew} value={crew}>
+                {crew}
+              </option>
+            ))}
+          </select>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <button
+            onClick={applyFilters}
+            disabled={loading}
+            className="btn-primary flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>Applying Filters...</span>
+              </>
+            ) : (
+              <>
+                <Filter size={16} />
+                <span>Apply Filters</span>
+              </>
+            )}
+          </button>
+          
+          {(selectedApp || selectedStream || selectedCrew) && (
+            <button
+              onClick={() => {
+                setSelectedApp('')
+                setSelectedStream('')
+                setSelectedCrew('')
+              }}
+              disabled={loading}
+              className="btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filter Tabs */}
@@ -581,8 +745,7 @@ export default function Dashboard() {
         {[
           { key: 'overview', label: 'Overview', icon: Activity },
           { key: 'execution-distribution', label: 'Execution Distribution', icon: PieChart },
-          { key: 'applications', label: 'Applications', icon: Filter },
-          { key: 'trends', label: 'Trends', icon: TrendingUp }
+          { key: 'execution-trends', label: 'Execution Trends', icon: TrendingUp }
         ].map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -664,10 +827,17 @@ export default function Dashboard() {
               color="#10b981" 
               onClick={() => handleChartClick('overall', overallSummary)}
             />
-            <TrendChart 
-              data={appSummaries.slice(0, 6)} 
-              title="Application Performance Trends" 
-            />
+            {/* Application Performance Trends Chart */}
+            {appSummaries.length > 0 ? (
+              <TrendChart 
+                data={appSummaries.slice(0, 6)} 
+                title="Application Performance Trends" 
+              />
+            ) : (
+              <div className="card p-6 text-center text-gray-500">
+                No application data available with current filters.
+              </div>
+            )}
           </div>
         </>
       )}
@@ -679,60 +849,57 @@ export default function Dashboard() {
             data={functionalSummary} 
             title="Functional Tests" 
             color="#10b981" 
-            onClick={() => handleChartClick('execution-distribution', functionalSummary)}
+            onClick={() => handleChartClick('execution-type', { type: 'functional', title: 'Functional Tests' })}
           />
           <PieChart 
             data={regressionSummary} 
             title="Regression Tests" 
             color="#8b5cf6" 
-            onClick={() => handleChartClick('execution-distribution', regressionSummary)}
+            onClick={() => handleChartClick('execution-type', { type: 'regression', title: 'Regression Tests' })}
           />
           <PieChart 
             data={sanitySummary} 
             title="Sanity Tests" 
             color="#f59e0b" 
-            onClick={() => handleChartClick('execution-distribution', sanitySummary)}
+            onClick={() => handleChartClick('suite-category', { type: 'sanity', title: 'Sanity Tests' })}
           />
           <PieChart 
             data={smokeSummary} 
             title="Smoke Tests" 
             color="#6366f1" 
-            onClick={() => handleChartClick('execution-distribution', smokeSummary)}
+            onClick={() => handleChartClick('suite-category', { type: 'smoke', title: 'Smoke Tests' })}
           />
         </div>
       )}
 
-      {/* Applications View */}
-      {selectedView === 'applications' && (
+      {/* Execution Trends View */}
+      {selectedView === 'execution-trends' && (
         <>
           <div className="card">
             <div className="px-6 py-4 border-b border-gray-200">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">Application Analysis</h2>
-                <Filter className="h-5 w-5 text-gray-400" />
+                <h2 className="text-xl font-semibold text-gray-900">Execution Trends Analysis</h2>
+                <TrendingUp className="h-5 w-5 text-gray-400" />
               </div>
             </div>
             <div className="p-6">
-              <div className="mb-4">
-                <label htmlFor="applicationSelect" className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Application:
+              <div className="mb-6">
+                <label htmlFor="dateRangeSelect" className="block text-sm font-medium text-gray-700 mb-2">
+                  Filter by Date Range:
                 </label>
                 <select
-                  id="applicationSelect"
-                  className="w-full md:w-1/2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={selectedApp}
-                  onChange={(e) => setSelectedApp(e.target.value)}
+                  id="dateRangeSelect"
+                  value={trendDateRange}
+                  onChange={(e) => setTrendDateRange(e.target.value)}
+                  className="w-full md:w-1/3 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="">Choose an application...</option>
-                  {applications.map((app) => (
-                    <option key={app.applicationId} value={app.applicationId}>
-                      {app.applicationName} ({app.applicationId})
-                    </option>
-                  ))}
+                  <option value="all">All Time</option>
+                  <option value="7days">Last 7 Days</option>
+                  <option value="30days">Last 30 Days</option>
                 </select>
               </div>
 
-              {appSummary && (
+              {/* {appSummary && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
                     <div className="text-2xl font-bold text-gray-900">{appSummary.totalBuilds}</div>
@@ -751,54 +918,39 @@ export default function Dashboard() {
                     <div className="text-sm text-gray-500">Success Rate</div>
                   </div>
                 </div>
-              )}
+              )} */}
             </div>
           </div>
 
-          <TrendChart 
-            data={appSummaries} 
-            title="All Applications Performance" 
-          />
+          {/* Trend Chart - Show date-wise trends with filtering */}
+          {selectedApp ? (
+            // Show trends for selected application
+            applicationDailyTrends.length > 0 ? (
+              <TrendChart 
+                data={filterTrendData(applicationDailyTrends, trendDateRange)} 
+                title={`Daily Execution Trends - ${applications.find(app => app.applicationId === selectedApp)?.applicationName || selectedApp}${selectedStream ? ` (${selectedStream})` : ''}${selectedCrew ? ` (${selectedCrew})` : ''}`} 
+              />
+            ) : (
+              <div className="card p-6 text-center text-gray-500">
+                No trend data available for the selected application with current filters.
+              </div>
+            )
+          ) : (
+            // Show overall trends for all applications
+            overallDailyTrends.length > 0 ? (
+              <TrendChart 
+                data={filterTrendData(overallDailyTrends, trendDateRange)} 
+                title={`Daily Execution Trends - All Applications${selectedStream ? ` (${selectedStream})` : ''}${selectedCrew ? ` (${selectedCrew})` : ''}`} 
+              />
+            ) : (
+              <div className="card p-6 text-center text-gray-500">
+                No trend data available with current filters.
+              </div>
+            )
+          )}
         </>
       )}
 
-      {/* Trends View */}
-      {selectedView === 'trends' && (
-        <div className="space-y-6">
-          {/* Date Range Filter for Trends */}
-          <div className="card p-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-3">Filter Trends by Date</h3>
-            <select
-              value={trendDateRange}
-              onChange={(e) => setTrendDateRange(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="all">All Time</option>
-              <option value="7days">Last 7 Days</option>
-              <option value="30days">Last 30 Days</option>
-            </select>
-          </div>
-
-          {/* Overall Trends */}
-          <TrendChart
-            data={filterTrendData(overallDailyTrends, trendDateRange)}
-            title="Overall Execution Trends (Daily)"
-          />
-
-          {/* Application Specific Trends */}
-          {selectedApp && applicationDailyTrends.length > 0 && (
-            <TrendChart
-              data={filterTrendData(applicationDailyTrends, trendDateRange)}
-              title={`Execution Trends for ${applications.find(app => app.applicationId === selectedApp)?.applicationName || selectedApp} (Daily)`}
-            />
-          )}
-          {!selectedApp && (
-            <div className="card p-6 text-center text-gray-500">
-              Select an application from the "Applications" tab to view its daily trends.
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Applications Summary Table */}
       {selectedView === 'overview' && (

@@ -174,9 +174,13 @@ public class DashboardService {
     /**
      * Get all applications execution summaries for overall dashboard
      */
-    public List<ApplicationExecutionSummary> getAllApplicationsSummary(String stream, String crew) {
+    public List<ApplicationExecutionSummary> getAllApplicationsSummary(String applicationId, String stream, String crew) {
         List<Application> applications;
-        if (stream != null && crew != null) {
+
+        if (applicationId != null) {
+            Application app = applicationService.getApplicationEntityByApplicationId(applicationId);
+            applications = app != null ? List.of(app) : List.of();
+        } else if (stream != null && crew != null) {
             applications = applicationRepository.findByStreamAndCrewOrderByApplicationName(stream, crew);
         } else if (stream != null) {
             applications = applicationRepository.findByStreamOrderByApplicationName(stream);
@@ -188,10 +192,9 @@ public class DashboardService {
         
         return applications.stream()
                 .map(app -> {
-                    // Pass null for applicationId as it's already filtered by app.getId()
-                    Long totalBuilds = executionRepository.countTotalExecutions(app.getApplicationId(), null, null);
-                    Long totalBuildsPassed = executionRepository.countPassedExecutions(app.getApplicationId(), null, null);
-                    Long totalBuildsFailed = executionRepository.countFailedExecutions(app.getApplicationId(), null, null);
+                    Long totalBuilds = executionRepository.countTotalExecutions(app.getApplicationId(), stream, crew);
+                    Long totalBuildsPassed = executionRepository.countPassedExecutions(app.getApplicationId(), stream, crew);
+                    Long totalBuildsFailed = executionRepository.countFailedExecutions(app.getApplicationId(), stream, crew);
                     
                     return new ApplicationExecutionSummary(
                             app.getApplicationId(),
@@ -201,6 +204,7 @@ public class DashboardService {
                             totalBuildsFailed.intValue()
                     );
                 })
+                .filter(summary -> summary.getTotalBuilds() > 0)
                 .collect(Collectors.toList());
     }
 

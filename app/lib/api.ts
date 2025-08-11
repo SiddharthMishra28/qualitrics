@@ -55,29 +55,70 @@ export const executionApi = {
   
   getByReference: (executionReference: string): Promise<ExecutionDto> =>
     api.get(`/executions/${executionReference}`).then(res => res.data),
+
+  getByType: (executionType: string): Promise<ExecutionDto[]> =>
+    api.get(`/executions/type/${executionType}`).then(res => res.data),
+
+  getBySuiteCategory: (suiteCategory: string): Promise<ExecutionDto[]> =>
+    api.get(`/executions/suite/${suiteCategory}`).then(res => res.data),
 }
 
 // Dashboard API
 export const dashboardApi = {
-  getOverallSummary: (): Promise<OverallExecutionSummary> =>
-    api.get('/dashboard/summary').then(res => res.data),
+  getOverallSummary: (applicationId?: string, stream?: string, crew?: string): Promise<OverallExecutionSummary> => {
+    const params = new URLSearchParams();
+    if (applicationId) params.append('applicationId', applicationId);
+    if (stream) params.append('stream', stream);
+    if (crew) params.append('crew', crew);
+    const queryString = params.toString();
+    return api.get(`/dashboard/summary${queryString ? `?${queryString}` : ''}`).then(res => res.data);
+  },
   
-  getSuiteSummary: (suiteCategory: string): Promise<OverallExecutionSummary> =>
-    api.get(`/dashboard/${suiteCategory}/suite-summary`).then(res => res.data),
+  getSuiteSummary: (suiteCategory: string, applicationId?: string, stream?: string, crew?: string): Promise<OverallExecutionSummary> => {
+    const params = new URLSearchParams();
+    if (applicationId) params.append('applicationId', applicationId);
+    if (stream) params.append('stream', stream);
+    if (crew) params.append('crew', crew);
+    const queryString = params.toString();
+    return api.get(`/dashboard/${suiteCategory}/suite-summary${queryString ? `?${queryString}` : ''}`).then(res => res.data);
+  },
   
-  getExecutionSummary: (executionType: string): Promise<OverallExecutionSummary> =>
-    api.get(`/dashboard/${executionType}/execution-summary`).then(res => res.data),
+  getExecutionSummary: (executionType: string, applicationId?: string, stream?: string, crew?: string): Promise<OverallExecutionSummary> => {
+    const params = new URLSearchParams();
+    if (applicationId) params.append('applicationId', applicationId);
+    if (stream) params.append('stream', stream);
+    if (crew) params.append('crew', crew);
+    const queryString = params.toString();
+    return api.get(`/dashboard/${executionType}/execution-summary${queryString ? `?${queryString}` : ''}`).then(res => res.data);
+  },
   
   getApplicationSummary: (applicationId: string): Promise<ApplicationExecutionSummary> =>
     api.get(`/dashboard/${applicationId}/summary`).then(res => res.data),
   
-  getAllApplicationsSummary: (): Promise<ApplicationExecutionSummary[]> =>
-    api.get('/dashboard/applications/summary').then(res => res.data),
+  getAllApplicationsSummary: (applicationId?: string, stream?: string, crew?: string): Promise<ApplicationExecutionSummary[]> => {
+    const params = new URLSearchParams();
+    if (applicationId) params.append('applicationId', applicationId);
+    if (stream) params.append('stream', stream);
+    if (crew) params.append('crew', crew);
+    const queryString = params.toString();
+    return api.get(`/dashboard/applications/summary${queryString ? `?${queryString}` : ''}`).then(res => res.data);
+  },
 
   // New trend APIs
-  getOverallDailyExecutionTrends: (): Promise<DailyExecutionSummary[]> =>
-    api.get('/dashboard/trends-data/overall').then(res => res.data),
+  getOverallDailyExecutionTrends: (applicationId?: string, stream?: string, crew?: string): Promise<DailyExecutionSummary[]> => {
+    const params = new URLSearchParams();
+    if (applicationId) params.append('applicationId', applicationId);
+    if (stream) params.append('stream', stream);
+    if (crew) params.append('crew', crew);
+    const queryString = params.toString();
+    return api.get(`/dashboard/trends-data/overall${queryString ? `?${queryString}` : ''}`).then(res => res.data);
+  },
 
-  getApplicationDailyExecutionTrends: (applicationId: string): Promise<DailyExecutionSummary[]> =>
-    api.get(`/dashboard/trends/applications/${applicationId}`).then(res => res.data),
+  getApplicationDailyExecutionTrends: (applicationId: string, stream?: string, crew?: string): Promise<DailyExecutionSummary[]> => {
+    const params = new URLSearchParams();
+    if (stream) params.append('stream', stream);
+    if (crew) params.append('crew', crew);
+    const queryString = params.toString();
+    return api.get(`/dashboard/trends/applications/${applicationId}${queryString ? `?${queryString}` : ''}`).then(res => res.data);
+  },
 }
