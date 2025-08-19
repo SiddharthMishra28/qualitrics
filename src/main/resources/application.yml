@@ -12,9 +12,22 @@ spring:
      active: h2
   application:
     name: test-management-api
-  
-  
-    
+  mail:
+    host: ${SMTP_HOST:smtp.gmail.com}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:user@gmail.com}
+    password: ${SMTP_PASSWORD:password}
+    to: ${MAIL_TO:test@test.com}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+app:
+  baseUrl: ${APP_BASE_URL:http://localhost:3000}
+
+
 logging:
   level:
     com.testmanagement: INFO

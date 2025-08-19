@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Test Execution Summary</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #dddddd;
+            text-align: left;
+            padding: 8px;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <h2>Test Execution Summary</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Crew</th>
+                <th>Stream</th>
+                <th>Application</th>
+                <th>Passed</th>
+                <th>Failed</th>
+                <th>Skipped</th>
+                <th>Overall Health</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="summary : ${report.applicationTestSummaries}">
+                <td th:text="${summary.crew}"></td>
+                <td th:text="${summary.stream}"></td>
+                <td th:text="${summary.applicationName}"></td>
+                <td th:text="${summary.passed}"></td>
+                <td th:text="${summary.failed}"></td>
+                <td th:text="${summary.skipped}"></td>
+                <td th:text="${summary.overallHealth}"></td>
+            </tr>
+        </tbody>
+    </table>
+    <p>
+        For more details, visit the application dashboard: <a th:href="${appBaseUrl}" th:text="${appBaseUrl}"></a>
+    </p>
+</body>
+</html>
