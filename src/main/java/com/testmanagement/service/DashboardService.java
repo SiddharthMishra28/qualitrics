@@ -221,4 +221,33 @@ public class DashboardService {
     public List<com.testmanagement.dto.DailyExecutionSummary> getApplicationDailyExecutionSummary(String applicationId, String stream, String crew) {
         return executionRepository.findDailyExecutionSummaryOverall(applicationId, stream, crew);
     }
+
+    /**
+     * Get test summary for all applications for email report
+     */
+    public List<com.testmanagement.email.models.ApplicationTestSummary> getTestSummaryForEmail() {
+        List<Application> applications = applicationRepository.findAll();
+        return applications.stream()
+                .map(app -> {
+                    com.testmanagement.dto.TestCounts testCounts = executionRepository.getTestCountsByApplicationId(app.getId());
+                    if (testCounts == null || (testCounts.getPassed() == 0 && testCounts.getFailed() == 0 && testCounts.getSkipped() == 0)) {
+                        return null;
+                    }
+                    String overallHealth = "HEALTHY";
+                    if (testCounts.getFailed() > 0) {
+                        overallHealth = "UNHEALTHY";
+                    }
+                    return new com.testmanagement.email.models.ApplicationTestSummary(
+                            app.getCrew(),
+                            app.getStream(),
+                            app.getApplicationName(),
+                            (int) testCounts.getPassed(),
+                            (int) testCounts.getFailed(),
+                            (int) testCounts.getSkipped(),
+                            overallHealth
+                    );
+                })
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toList());
+    }
 }

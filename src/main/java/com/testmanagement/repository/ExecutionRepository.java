@@ -242,5 +242,14 @@ public interface ExecutionRepository extends JpaRepository<Execution, Long> {
            "ORDER BY CAST(e.createdAt AS java.sql.Date) ASC")
     List<com.testmanagement.dto.DailyExecutionSummary> findDailyExecutionSummaryOverall(@Param("applicationId") String applicationId, @Param("stream") String stream, @Param("crew") String crew);
 
-    
+    /**
+     * Get test counts for a given application
+     */
+    @Query("SELECT NEW com.testmanagement.dto.TestCounts(" +
+           "SUM(e.countPassed), " +
+           "SUM(e.countFailed), " +
+           "SUM(e.countSkipped)) " +
+           "FROM Execution e " +
+           "WHERE e.application.id = :applicationId")
+    com.testmanagement.dto.TestCounts getTestCountsByApplicationId(@Param("applicationId") Long applicationId);
 }
